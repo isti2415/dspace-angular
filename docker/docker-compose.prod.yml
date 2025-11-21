@@ -40,7 +40,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - acme:/etc/acme.sh
     environment:
-      - DEFAULT_EMAIL=istiaqahmed87@gmail.com
+      - DEFAULT_EMAIL=ccds@iub.edu.bd
       - NGINX_PROXY_CONTAINER=nginx-proxy
     depends_on:
       - nginx-proxy
@@ -59,9 +59,9 @@ services:
       dockerfile: Dockerfile
     environment:
       # --- Auto-SSL Configuration ---
-      - VIRTUAL_HOST=repository.ccdsiub.live
-      - LETSENCRYPT_HOST=repository.ccdsiub.live
-      - LETSENCRYPT_EMAIL=istiaqahmed87@gmail.com
+      - VIRTUAL_HOST=dspace.ccds.ai
+      - LETSENCRYPT_HOST=dspace.ccds.ai
+      - LETSENCRYPT_EMAIL=ccds@iub.edu.bd
       - VIRTUAL_PORT=4000
       # --- DSpace UI Config ---
       # IMPORTANT: Set to false since nginx-proxy handles SSL
@@ -71,7 +71,7 @@ services:
       - DSPACE_UI_NAMESPACE=/
       # --- DSpace REST Config (Public HTTPS) ---
       - DSPACE_REST_SSL=true
-      - DSPACE_REST_HOST=api.repository.ccdsiub.live
+      - DSPACE_REST_HOST=api.dspace.ccds.ai
       - DSPACE_REST_PORT=443
       - DSPACE_REST_NAMESPACE=/server
     networks:
@@ -95,16 +95,16 @@ services:
     image: "${DOCKER_REGISTRY:-docker.io}/${DOCKER_OWNER:-dspace}/dspace:${DSPACE_VER:-latest-test}"
     environment:
       # --- Auto-SSL Configuration ---
-      - VIRTUAL_HOST=api.repository.ccdsiub.live
-      - LETSENCRYPT_HOST=api.repository.ccdsiub.live
-      - LETSENCRYPT_EMAIL=istiaqahmed87@gmail.com
+      - VIRTUAL_HOST=api.dspace.ccds.ai
+      - LETSENCRYPT_HOST=api.dspace.ccds.ai
+      - LETSENCRYPT_EMAIL=ccds@iub.edu.bd
       - VIRTUAL_PORT=8080
       # --- DSpace Config ---
       - dspace__P__dir=/dspace
       - dspace__P__name=DSpace Production
       # IMPORTANT: These must match the Public HTTPS URLs exactly
-      - dspace__P__server__P__url=https://api.repository.ccdsiub.live/server
-      - dspace__P__ui__P__url=https://repository.ccdsiub.live
+      - dspace__P__server__P__url=https://api.dspace.ccds.ai/server
+      - dspace__P__ui__P__url=https://dspace.ccds.ai
       # Database & Solr Internal Links
       - db__P__url=jdbc:postgresql://dspacedb:5432/dspace
       - solr__P__server=http://dspacesolr:8983/solr
