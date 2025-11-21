@@ -2,24 +2,66 @@ version: '3.8'
 
 networks:
   dspacenet:
-    external: false
+    driver: bridge
 
 services:
   # ------------------------------------------------------------
-  # DSPACE FRONTEND (Angular)
+  # 1. AUTOMATED REVERSE PROXY (Nginx)
+  # ------------------------------------------------------------
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - conf:/etc/nginx/conf.d
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - dspacenet
+    restart: unless-stopped
+
+  # ------------------------------------------------------------
+  # 2. AUTOMATED SSL GENERATOR (Let's Encrypt)
+  # ------------------------------------------------------------
+  acme-companion:
+    image: nginxproxy/acme-companion
+    container_name: nginx-proxy-acme
+    volumes:
+      - conf:/etc/nginx/conf.d
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - certs:/etc/nginx/certs:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme:/etc/acme.sh
+    environment:
+      - DEFAULT_EMAIL=istiaqahmed87@gmail.com
+      - NGINX_PROXY_CONTAINER=nginx-proxy
+    depends_on:
+      - nginx-proxy
+    networks:
+      - dspacenet
+    restart: unless-stopped
+
+  # ------------------------------------------------------------
+  # 3. DSPACE FRONTEND (Angular)
   # ------------------------------------------------------------
   dspace-angular:
-    container_name: dspace-angular
     image: dspace/dspace-angular:latest
     environment:
-      # --- DSpace UI Config ---
+      - VIRTUAL_HOST=repository.ccdsiub.live
+      - LETSENCRYPT_HOST=repository.ccdsiub.live
+      - LETSENCRYPT_EMAIL=istiaqahmed87@gmail.com
+      - VIRTUAL_PORT=4000
       - DSPACE_UI_SSL=false
       - DSPACE_UI_HOST=0.0.0.0
       - DSPACE_UI_PORT=4000
       - DSPACE_UI_NAMESPACE=/
-      # --- DSpace REST Config (Public HTTPS) ---
       - DSPACE_REST_SSL=true
-      - DSPACE_REST_HOST=${DSPACE_API_DOMAIN:-api.repository.ccdsiub.live}
+      - DSPACE_REST_HOST=api.repository.ccdsiub.live
       - DSPACE_REST_PORT=443
       - DSPACE_REST_NAMESPACE=/server
     networks:
@@ -28,11 +70,6 @@ services:
       dspace:
         condition: service_healthy
     restart: unless-stopped
-    labels:
-      # Coolify labels for automatic SSL and routing
-      - coolify.managed=true
-      - coolify.type=application
-      - coolify.name=dspace-frontend
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000 || exit 1"]
       interval: 30s
@@ -41,26 +78,24 @@ services:
       start_period: 300s
 
   # ------------------------------------------------------------
-  # DSPACE BACKEND (API)
+  # 4. DSPACE BACKEND (API)
   # ------------------------------------------------------------
   dspace:
-    container_name: dspace
     image: dspace/dspace:latest-test
     environment:
-      # --- DSpace Config ---
+      - VIRTUAL_HOST=api.repository.ccdsiub.live
+      - LETSENCRYPT_HOST=api.repository.ccdsiub.live
+      - LETSENCRYPT_EMAIL=istiaqahmed87@gmail.com
+      - VIRTUAL_PORT=8080
       - dspace__P__dir=/dspace
       - dspace__P__name=DSpace Production
-      # IMPORTANT: These URLs will be set by Coolify
-      - dspace__P__server__P__url=https://${DSPACE_API_DOMAIN:-api.repository.ccdsiub.live}/server
-      - dspace__P__ui__P__url=https://${DSPACE_UI_DOMAIN:-repository.ccdsiub.live}
-      # Database & Solr Internal Links
+      - dspace__P__server__P__url=https://api.repository.ccdsiub.live/server
+      - dspace__P__ui__P__url=https://repository.ccdsiub.live
       - db__P__url=jdbc:postgresql://dspacedb:5432/dspace
       - solr__P__server=http://dspacesolr:8983/solr
-      # Trust Coolify's proxy
-      - proxies__P__trusted__P__ipranges=172.16.0.0/12,10.0.0.0/8
+      - proxies__P__trusted__P__ipranges=172.24.0.0/16
       - useProxies=true
       - LOGGING_CONFIG=/dspace/config/log4j2-container.xml
-      # Java options
       - JAVA_OPTS=-Xmx2048m -Xms1024m
     depends_on:
       dspacedb:
@@ -72,11 +107,6 @@ services:
     volumes:
       - assetstore:/dspace/assetstore
     restart: unless-stopped
-    labels:
-      # Coolify labels
-      - coolify.managed=true
-      - coolify.type=application
-      - coolify.name=dspace-backend
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/server/api"]
       interval: 30s
@@ -92,16 +122,15 @@ services:
         java -jar /dspace/webapps/server-boot.jar --dspace.dir=/dspace
 
   # ------------------------------------------------------------
-  # DATABASE
+  # 5. DATABASE
   # ------------------------------------------------------------
   dspacedb:
-    container_name: dspacedb
     image: postgres:15
     environment:
       PGDATA: /pgdata
       POSTGRES_DB: dspace
       POSTGRES_USER: dspace
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-dspace}
+      POSTGRES_PASSWORD: dspace
     networks:
       - dspacenet
     volumes:
@@ -115,10 +144,9 @@ services:
     shm_size: 256mb
 
   # ------------------------------------------------------------
-  # SOLR
+  # 6. SOLR
   # ------------------------------------------------------------
   dspacesolr:
-    container_name: dspacesolr
     image: dspace/dspace-solr:latest
     networks:
       - dspacenet
@@ -157,3 +185,8 @@ volumes:
   assetstore:
   pgdata:
   solr_data:
+  conf:
+  vhost:
+  html:
+  certs:
+  acme:
