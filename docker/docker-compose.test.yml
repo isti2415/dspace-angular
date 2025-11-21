@@ -12,8 +12,8 @@ services:
     image: nginxproxy/nginx-proxy:alpine
     container_name: nginx-proxy
     ports:
-      - "81:80"
-      - "444:443"
+      - "80:80"
+      - "443:443"
     volumes:
       - conf:/etc/nginx/conf.d
       - vhost:/etc/nginx/vhost.d
@@ -62,7 +62,7 @@ services:
       - DSPACE_UI_NAMESPACE=/
       - DSPACE_REST_SSL=true
       - DSPACE_REST_HOST=api.repository.ccdsiub.live
-      - DSPACE_REST_PORT=444
+      - DSPACE_REST_PORT=443
       - DSPACE_REST_NAMESPACE=/server
     networks:
       - dspacenet
