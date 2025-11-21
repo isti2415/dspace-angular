@@ -2,7 +2,9 @@ version: '3.8'
 
 networks:
   dspacenet:
-    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
 
 services:
   # ------------------------------------------------------------
@@ -50,16 +52,24 @@ services:
   # 3. DSPACE FRONTEND (Angular)
   # ------------------------------------------------------------
   dspace-angular:
-    image: dspace/dspace-angular:latest
+    container_name: dspace-angular
+    image: "${DOCKER_REGISTRY:-docker.io}/${DOCKER_OWNER:-dspace}/dspace-angular:${DSPACE_VER:-latest}"
+    build:
+      context: ..
+      dockerfile: Dockerfile
     environment:
+      # --- Auto-SSL Configuration ---
       - VIRTUAL_HOST=repository.ccdsiub.live
       - LETSENCRYPT_HOST=repository.ccdsiub.live
       - LETSENCRYPT_EMAIL=istiaqahmed87@gmail.com
       - VIRTUAL_PORT=4000
+      # --- DSpace UI Config ---
+      # IMPORTANT: Set to false since nginx-proxy handles SSL
       - DSPACE_UI_SSL=false
       - DSPACE_UI_HOST=0.0.0.0
       - DSPACE_UI_PORT=4000
       - DSPACE_UI_NAMESPACE=/
+      # --- DSpace REST Config (Public HTTPS) ---
       - DSPACE_REST_SSL=true
       - DSPACE_REST_HOST=api.repository.ccdsiub.live
       - DSPACE_REST_PORT=443
@@ -81,21 +91,29 @@ services:
   # 4. DSPACE BACKEND (API)
   # ------------------------------------------------------------
   dspace:
-    image: dspace/dspace:latest-test
+    container_name: dspace
+    image: "${DOCKER_REGISTRY:-docker.io}/${DOCKER_OWNER:-dspace}/dspace:${DSPACE_VER:-latest-test}"
     environment:
+      # --- Auto-SSL Configuration ---
       - VIRTUAL_HOST=api.repository.ccdsiub.live
       - LETSENCRYPT_HOST=api.repository.ccdsiub.live
       - LETSENCRYPT_EMAIL=istiaqahmed87@gmail.com
       - VIRTUAL_PORT=8080
+      # --- DSpace Config ---
       - dspace__P__dir=/dspace
       - dspace__P__name=DSpace Production
+      # IMPORTANT: These must match the Public HTTPS URLs exactly
       - dspace__P__server__P__url=https://api.repository.ccdsiub.live/server
       - dspace__P__ui__P__url=https://repository.ccdsiub.live
+      # Database & Solr Internal Links
       - db__P__url=jdbc:postgresql://dspacedb:5432/dspace
       - solr__P__server=http://dspacesolr:8983/solr
+      # Trust the Docker Network IP range for proxy headers
       - proxies__P__trusted__P__ipranges=172.24.0.0/16
+      # Additional proxy settings for proper header handling
       - useProxies=true
       - LOGGING_CONFIG=/dspace/config/log4j2-container.xml
+      # Java options for better performance
       - JAVA_OPTS=-Xmx2048m -Xms1024m
     depends_on:
       dspacedb:
@@ -125,7 +143,8 @@ services:
   # 5. DATABASE
   # ------------------------------------------------------------
   dspacedb:
-    image: postgres:15
+    container_name: dspacedb
+    image: "docker.io/postgres:${POSTGRES_VERSION:-15}"
     environment:
       PGDATA: /pgdata
       POSTGRES_DB: dspace
@@ -147,7 +166,8 @@ services:
   # 6. SOLR
   # ------------------------------------------------------------
   dspacesolr:
-    image: dspace/dspace-solr:latest
+    container_name: dspacesolr
+    image: "${DOCKER_REGISTRY:-docker.io}/${DOCKER_OWNER:-dspace}/dspace-solr:${DSPACE_VER:-latest}"
     networks:
       - dspacenet
     working_dir: /var/solr/data
@@ -181,6 +201,9 @@ services:
         chown -R solr:solr /var/solr
         runuser -u solr -- solr-foreground
 
+# ------------------------------------------------------------
+# VOLUMES
+# ------------------------------------------------------------
 volumes:
   assetstore:
   pgdata:
